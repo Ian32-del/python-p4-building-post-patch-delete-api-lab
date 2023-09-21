@@ -18,53 +18,83 @@ db.init_app(app)
 def home():
     return '<h1>Bakery GET-POST-PATCH-DELETE API</h1>'
 
-@app.route('/bakeries')
-def bakeries():
+@app.route('/baked_goods', methods=['POST'])
+# this line of code specilises on the url route and indicates that it should only respond to POST requests
+def create_baked_good():
+    # Get data from the form
+    name = request.form.get('name')
+    # it extracts the value of the name field from the data sent in the POST request
+    price = float(request.form.get('price'))
+    # it extracts the price value from the formdata and converts it into a float
 
-    bakeries = Bakery.query.all()
-    bakeries_serialized = [bakery.to_dict() for bakery in bakeries]
+    # Create a new BakedGood instance
+    new_baked_good = BakedGood(name=name, price=price)
 
-    response = make_response(
-        bakeries_serialized,
-        200
-    )
-    return response
+    try:  
+        # we want to capture any potential exception that may occur during interaction
+        # Add the new baked good to the database
+        db.session.add(new_baked_good)
+        db.session.commit()
 
-@app.route('/bakeries/<int:id>')
-def bakery_by_id(id):
+        # Return the data of the newly created baked good as JSON
+        return jsonify({
+            'id': new_baked_good.id,
+            'name': new_baked_good.name,
+            'price': new_baked_good.price
+        }), 201  # HTTP status code 201 indicates "Created"
+    except Exception as e:
+        # Handle any database-related errors
+        db.session.rollback()
+        return jsonify({'error': 'Failed to create baked good', 'message': str(e)}), 500  # HTTP status code 500 for internal server error
 
-    bakery = Bakery.query.filter_by(id=id).first()
-    bakery_serialized = bakery.to_dict()
 
-    response = make_response(
-        bakery_serialized,
-        200
-    )
-    return response
+@app.route('/bakeries/<int:id>', methods=['PATCH'])
+def update_bakery(id):
+    try:
+        # inside here we are trying to retrieve a bakery with the specified id
+        bakery = Bakery.query.get(id)
+        if not bakery:
+            return jsonify({'error': 'Bakery not found'}), 404  # HTTP status code 404 for not found
+        
+        # Get data from the form
+        new_name = request.form.get('name')
 
-@app.route('/baked_goods/by_price')
-def baked_goods_by_price():
-    baked_goods_by_price = BakedGood.query.order_by(BakedGood.price).all()
-    baked_goods_by_price_serialized = [
-        bg.to_dict() for bg in baked_goods_by_price
-    ]
-    
-    response = make_response(
-        baked_goods_by_price_serialized,
-        200
-    )
-    return response
+        # Update the bakery's name if a new name is provided in the form
+        if new_name:
+            bakery.name = new_name
 
-@app.route('/baked_goods/most_expensive')
-def most_expensive_baked_good():
-    most_expensive = BakedGood.query.order_by(BakedGood.price.desc()).limit(1).first()
-    most_expensive_serialized = most_expensive.to_dict()
+        # Commit the changes to the database
+        db.session.commit()
 
-    response = make_response(
-        most_expensive_serialized,
-        200
-    )
-    return response
+        # Return the updated bakery data as JSON
+        return jsonify(bakery.to_dict()), 200  # HTTP status code 200 for success
+    except Exception as e:
+        # Handle any database-related errors
+        db.session.rollback()
+        return jsonify({'error': 'Failed to update bakery', 'message': str(e)}), 500  # HTTP status code 500 for internal server error
+
+
+@app.route('/baked_goods/<int:id>', methods=['DELETE'])
+def delete_baked_good(id):
+    # Takes the argument of the id 
+    try:
+        baked_good = BakedGood.query.get(id)
+        # first it retrieves the baked good with the given id
+        if not baked_good:
+            return jsonify({'error': 'Baked good not found'}), 404  # HTTP status code 404 for not found
+
+        # Delete the baked good from the database
+        db.session.delete(baked_good)
+        db.session.commit()
+
+        # Return a JSON message confirming the deletion
+        return jsonify({'message': 'Baked good deleted successfully'}), 200  # HTTP status code 200 for success
+    except Exception as e:
+        # if there is any error in the deletion process it catches the execption and rolls back the database transaction using th db.session.rollback()and returns a json response with a 500 status code 
+        # Handle any database-related errors
+        db.session.rollback()
+        return jsonify({'error': 'Failed to delete baked good', 'message': str(e)}), 500  # HTTP status code 500 for internal server error
+
 
 if __name__ == '__main__':
     app.run(port=5555, debug=True)
